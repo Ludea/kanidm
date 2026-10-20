@@ -17,6 +17,20 @@ use tracing_subscriber::{filter::Directive, prelude::*, EnvFilter, Registry};
 const MAX_EVENTS_PER_SPAN: u32 = 64 * 1024;
 const MAX_ATTRIBUTES_PER_SPAN: u32 = 128;
 
+/// Returns the lowercase hostname.
+/// On WASI there is no hostname API, so it falls back to the HOSTNAME env var.
+#[cfg(not(target_os = "wasi"))]
+fn local_hostname() -> String {
+    gethostname::gethostname().to_string_lossy().to_lowercase()
+}
+
+#[cfg(target_os = "wasi")]
+fn local_hostname() -> String {
+    std::env::var("HOSTNAME")
+        .unwrap_or_else(|_| "localhost".to_string())
+        .to_lowercase()
+}
+
 /// This does all the startup things for the logging pipeline
 pub fn start_logging_pipeline(
     otlp_endpoint: &Option<String>,
@@ -107,9 +121,7 @@ pub fn start_logging_pipeline(
         };
 
         let version = format!("{}{}", env!("CARGO_PKG_VERSION"), git_rev);
-        let hostname = gethostname::gethostname();
-        let hostname = hostname.to_string_lossy();
-        let hostname = hostname.to_lowercase();
+        let hostname = local_hostname();
 
         let mut resource = Resource::builder().with_schema_url(
             [
